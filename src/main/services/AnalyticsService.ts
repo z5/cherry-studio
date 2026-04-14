@@ -1,10 +1,10 @@
 import type { TokenUsageData } from '@cherrystudio/analytics-client'
 import { AnalyticsClient } from '@cherrystudio/analytics-client'
 import { loggerService } from '@logger'
-import { generateUserAgent } from '@main/utils/systemInfo'
-import { APP_NAME } from '@shared/config/constant'
-import { app } from 'electron'
 
+// import { generateUserAgent } from '@main/utils/systemInfo'
+// import { APP_NAME } from '@shared/config/constant'
+// import { app } from 'electron'
 import { configManager } from './ConfigManager'
 
 const logger = loggerService.withContext('AnalyticsService')
