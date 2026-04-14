@@ -1,6 +1,6 @@
-# AI Assistant Guide
+# CLAUDE.md
 
-This file provides guidance to AI coding assistants when working with code in this repository. Adherence to these guidelines is crucial for maintaining code quality and consistency.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Guiding Principles (MUST FOLLOW)
 
@@ -124,6 +124,26 @@ Node.js backend services. Key services:
 | `OvmsManager` | OpenVINO model server management |
 | `NodeTraceService` | OpenTelemetry trace export |
 
+**Service Architecture Pattern**:
+- Most services follow singleton pattern with `getInstance()` static method
+- Private constructors with static instance management
+- Configuration shared via `configManager` singleton
+- Context-aware logging via `loggerService.withContext()`
+
+Example service pattern:
+```typescript
+export class WindowService {
+  private static instance: WindowService | null = null
+
+  public static getInstance(): WindowService {
+    if (!WindowService.instance) {
+      WindowService.instance = new WindowService()
+    }
+    return WindowService.instance
+  }
+}
+```
+
 Agents subsystem (`src/main/services/agents/`):
 - Drizzle ORM + LibSQL (SQLite) schema at `database/schema/index.ts`
 - Migrations in `resources/database/drizzle/`
@@ -167,6 +187,12 @@ Slices (redux-persist enabled):
 
 > **BLOCKED**: Do not add new Redux slices or change existing state shape until v2.0.0.
 
+**State Synchronization**:
+- Real-time sync across windows via `StoreSyncService`
+- Blacklist system for non-persisted state (`runtime`, `messages`, `tabs`)
+- Thunk pattern for async logic in `thunk/` directory
+- Versioned migrations in `migrate.ts`
+
 ### Database Layer
 
 - **IndexedDB** (Dexie): `src/renderer/src/databases/index.ts`
@@ -179,11 +205,26 @@ Slices (redux-persist enabled):
 
 ### IPC Communication
 
+**Structured IPC Channel System**:
 - Channel constants defined in `packages/shared/IpcChannel.ts`
-- Renderer → Main: `ipcRenderer.invoke(IpcChannel.XXX, ...args)` via `api.*` wrappers in `src/preload/index.ts`
-- Main → Renderer: `webContents.send(channel, data)`
-- Tracing: `tracedInvoke()` in preload attaches OpenTelemetry span context to IPC calls
+- Main process: Uses `ipcMain.handle()` for two-way communication and `ipcMain.on()` for one-way
+- Renderer process: Uses `ipcRenderer.invoke()` and `ipcRenderer.on()` via preload bridge
 - Typed API surface exposed via `contextBridge` as `window.api`
+
+Main process handler pattern:
+```typescript
+ipcMain.handle(IpcChannel.ReduxStoreReady, () => {
+  this.isReady = true
+  this.resolveReady()
+})
+```
+
+Renderer process via preload bridge:
+```typescript
+await window.api.storeSync.onUpdate(syncAction)
+```
+
+**Tracing**: `tracedInvoke()` in preload attaches OpenTelemetry span context to IPC calls
 
 ### AI Core (`packages/aiCore/`)
 
@@ -203,6 +244,13 @@ src/core/
 - Supports: OpenAI, Anthropic, Google, Azure, Mistral, Bedrock, Vertex, Ollama, Perplexity, xAI, HuggingFace, Cerebras, OpenRouter, Copilot, and more
 - Custom fork of openai package: `@cherrystudio/openai`
 
+**AI Architecture Features**:
+- Plugin system with `definePlugin()` for custom AI capabilities
+- Tool factory for extensible tool registration
+- Streaming support for text generation
+- Custom error types for different failure scenarios
+- Model version detection utilities (`isV2Model()`, `isV3Model()`)
+
 ### Multi-Window Architecture
 
 The renderer builds multiple HTML entry points:
@@ -211,6 +259,8 @@ The renderer builds multiple HTML entry points:
 - `selectionToolbar.html` — Text selection action toolbar
 - `selectionAction.html` — Selection action popup
 - `traceWindow.html` — MCP trace viewer
+
+Each window has its own renderer process but shares the same main process and preload bridge.
 
 ### Logging
 
@@ -290,13 +340,35 @@ Several dependencies have patches in `patches/` — be careful when upgrading:
 
 ## Testing Guidelines
 
-- Tests use Vitest 3 with project-based configuration
-- Main process tests: Node environment, `tests/main.setup.ts`
-- Renderer tests: jsdom environment, `tests/renderer.setup.ts`, `@testing-library/react`
-- aiCore tests: separate `packages/aiCore/vitest.config.ts`
-- All tests run without CI dependency (fully local)
-- Coverage via v8 provider (`pnpm test:coverage`)
-- **Features without tests are not considered complete**
+### Process-Isolated Test Architecture
+
+Tests use Vitest 3 with project-based configuration:
+
+- **Main process tests**: Node environment, `tests/main.setup.ts` with comprehensive Electron mocking
+- **Renderer tests**: jsdom environment, `tests/renderer.setup.ts`, `@testing-library/react`
+- **aiCore tests**: Separate `packages/aiCore/vitest.config.ts`
+- **E2E tests**: Playwright in `tests/e2e/`
+
+Main process mocking strategy:
+```typescript
+vi.mock('electron', () => ({
+  app: { getPath: vi.fn(), getVersion: vi.fn() },
+  ipcMain: { handle: vi.fn(), on: vi.fn() },
+  BrowserWindow: vi.fn(),
+  // ... complete mock suite
+}))
+```
+
+All tests run without CI dependency (fully local). Coverage via v8 provider (`pnpm test:coverage`).
+
+**Features without tests are not considered complete**
+
+### Test Organization
+
+- Service-level tests in `src/main/services/__tests__/`
+- Component tests alongside renderer code
+- Integration tests for cross-process communication
+- Mock services for external dependencies (logger, electron-store, etc.)
 
 ## Important Notes
 
@@ -326,3 +398,18 @@ Do not introduce new features to these files. Bug fixes only.
 - URL sanitization via `strict-url-sanitise`
 - IP validation via `ipaddr.js` (API server)
 - `express-validator` for API server request validation
+
+### Skills System
+
+Cherry Studio uses a skills system for extending functionality:
+- Skills are defined in `.agents/skills/` directory
+- Each skill has a `SKILL.md` file defining when and how to use it
+- Skills are invoked via the `Skill` tool in Claude Code
+- Common skills include: `gh-create-pr`, `gh-create-issue`, `cherry-pr-test`, `prepare-release`
+
+### Windows Development
+
+Windows developers must enable symlink support before cloning:
+1. Enable Developer Mode or grant `SeCreateSymbolicLinkPrivilege`
+2. Configure Git: `git config --global core.symlinks true`
+3. Clone (or re-clone) the repository
