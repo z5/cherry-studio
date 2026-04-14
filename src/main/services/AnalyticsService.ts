@@ -21,25 +21,26 @@ class AnalyticsService {
   }
 
   public init(): void {
-    this.client = new AnalyticsClient({
-      clientId: configManager.getClientId(),
-      channel: 'cherry-studio',
-      onError: (error) => logger.error('Analytics error:', error),
-      headers: {
-        'User-Agent': generateUserAgent(),
-        'Client-Id': configManager.getClientId(),
-        'App-Name': APP_NAME,
-        'App-Version': `v${app.getVersion()}`,
-        OS: process.platform
-      }
-    })
+    // Analytics service disabled - no data collection
+    // this.client = new AnalyticsClient({
+    //   clientId: configManager.getClientId(),
+    //   channel: 'cherry-studio',
+    //   onError: (error) => logger.error('Analytics error:', error),
+    //   headers: {
+    //     'User-Agent': generateUserAgent(),
+    //     'Client-Id': configManager.getClientId(),
+    //     'App-Name': APP_NAME,
+    //     'App-Version': `v${app.getVersion()}`,
+    //     OS: process.platform
+    //   }
+    // })
 
-    this.client.trackAppLaunch({
-      version: app.getVersion(),
-      os: process.platform
-    })
+    // this.client.trackAppLaunch({
+    //   version: app.getVersion(),
+    //   os: process.platform
+    // })
 
-    logger.info('Analytics service initialized')
+    logger.info('Analytics service disabled')
   }
 
   public trackTokenUsage(data: TokenUsageData): void {
