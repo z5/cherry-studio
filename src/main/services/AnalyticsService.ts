@@ -1,10 +1,10 @@
 import type { TokenUsageData } from '@cherrystudio/analytics-client'
 import { AnalyticsClient } from '@cherrystudio/analytics-client'
 import { loggerService } from '@logger'
+import { generateUserAgent } from '@main/utils/systemInfo'
+import { APP_NAME } from '@shared/config/constant'
+import { app } from 'electron'
 
-// import { generateUserAgent } from '@main/utils/systemInfo'
-// import { APP_NAME } from '@shared/config/constant'
-// import { app } from 'electron'
 import { configManager } from './ConfigManager'
 
 const logger = loggerService.withContext('AnalyticsService')
@@ -21,26 +21,30 @@ class AnalyticsService {
   }
 
   public init(): void {
-    // Analytics service disabled - no data collection
-    // this.client = new AnalyticsClient({
-    //   clientId: configManager.getClientId(),
-    //   channel: 'cherry-studio',
-    //   onError: (error) => logger.error('Analytics error:', error),
-    //   headers: {
-    //     'User-Agent': generateUserAgent(),
-    //     'Client-Id': configManager.getClientId(),
-    //     'App-Name': APP_NAME,
-    //     'App-Version': `v${app.getVersion()}`,
-    //     OS: process.platform
-    //   }
-    // })
+    if (!configManager.getEnableDataCollection()) {
+      logger.info('Analytics service disabled by user preference')
+      return
+    }
 
-    // this.client.trackAppLaunch({
-    //   version: app.getVersion(),
-    //   os: process.platform
-    // })
+    this.client = new AnalyticsClient({
+      clientId: configManager.getClientId(),
+      channel: 'cherry-studio',
+      onError: (error) => logger.error('Analytics error:', error),
+      headers: {
+        'User-Agent': generateUserAgent(),
+        'Client-Id': configManager.getClientId(),
+        'App-Name': APP_NAME,
+        'App-Version': `v${app.getVersion()}`,
+        OS: process.platform
+      }
+    })
 
-    logger.info('Analytics service disabled')
+    this.client.trackAppLaunch({
+      version: app.getVersion(),
+      os: process.platform
+    })
+
+    logger.info('Analytics service initialized')
   }
 
   public trackTokenUsage(data: TokenUsageData): void {
@@ -54,7 +58,7 @@ class AnalyticsService {
   }
 
   public async trackAppUpdate(): Promise<void> {
-    if (!this.client) {
+    if (!this.client || !configManager.getEnableDataCollection()) {
       return
     }
 
